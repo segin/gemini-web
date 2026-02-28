@@ -50,19 +50,21 @@ export async function POST(req: Request) {
     let args = ['-p'];
     const resumeFlag = "--resume";
     const resumeValue = "latest";
+    const outputFormatFlag = "-o";
+    const outputFormatValue = "stream-json";
 
     if (text) {
-      args.push(text, resumeFlag, resumeValue);
+      args.push(text, resumeFlag, resumeValue, outputFormatFlag, outputFormatValue);
     } else if (audio) {
       const audioBuffer = Buffer.from(audio.split(',')[1], 'base64');
       const audioPath = path.join(cwd, `input_${Date.now()}.webm`);
       fs.writeFileSync(audioPath, audioBuffer);
-      args.push(`Process the attached audio file: ${audioPath}`, resumeFlag, resumeValue);
+      args.push(`Process the attached audio file: ${audioPath}`, resumeFlag, resumeValue, outputFormatFlag, outputFormatValue);
     } else {
       return NextResponse.json({ error: "No input provided" }, { status: 400 });
     }
 
-    const proc = spawn('gemini', args, { cwd, env: { ...process.env, FORCE_COLOR: '1' } });
+    const proc = spawn('gemini', args, { cwd, env: { ...process.env } });
     
     const stream = new ReadableStream({
       start(controller) {

@@ -96,12 +96,37 @@ export default function Home() {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let done = false;
+        let buffer = "";
+
         while (!done) {
           const { value, done: readerDone } = await reader.read();
           done = readerDone;
           if (value) {
-            const chunk = decoder.decode(value, { stream: !done });
-            setOutput(prev => prev + chunk);
+            buffer += decoder.decode(value, { stream: !done });
+            
+            // Process NDJSON lines
+            let lines = buffer.split('\n');
+            buffer = lines.pop() || ""; // Keep the last incomplete line in buffer
+
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              try {
+                const event = JSON.parse(line);
+                
+                if (event.type === 'message' && event.role === 'assistant') {
+                   setOutput(prev => prev + event.content);
+                } else if (event.type === 'tool_use') {
+                   setOutput(prev => prev + `\n\n[\u2692 Tool: ${event.name}]\n`);
+                } else if (event.type === 'tool_result' && event.error) {
+                   setOutput(prev => prev + `\n[Tool Error: ${event.error}]\n\n`);
+                } else if (event.type === 'error') {
+                   setOutput(prev => prev + `\n[\u26A0 Error: ${event.message}]\n\n`);
+                }
+              } catch (e) {
+                // If it fails to parse, it might be raw CLI output (e.g. from a fallback)
+                setOutput(prev => prev + line + '\n');
+              }
+            }
           }
         }
       }
