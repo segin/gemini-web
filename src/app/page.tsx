@@ -342,8 +342,8 @@ export default function Home() {
 
             <h3 className="ext-section-title">Gallery (geminicli.com)</h3>
             <div className="ext-grid">
-              {availableExtensions.map((ext) => (
-                <div key={ext.id} className="ext-card">
+              {availableExtensions.map((ext, index) => (
+                <div key={`${ext.id}-${index}`} className="ext-card">
                   <div className="ext-card-header">
                     {ext.avatar ? (
                       <img src={ext.avatar} width="40" height="40" className="ext-avatar" alt="" />
