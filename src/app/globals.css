@@ -356,6 +356,58 @@ select.input-field {
   justify-content: center;
 }
 
+/* Directory Browser */
+.dir-browser {
+  display: flex;
+  flex-direction: column;
+  height: 60vh;
+  max-height: 400px;
+  text-align: left;
+}
+
+.dir-current-path {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  padding: 0.75rem;
+  background-color: var(--bg-main);
+  border-radius: var(--radius-sm);
+  margin-bottom: 1rem;
+  word-break: break-all;
+  color: var(--accent-primary);
+}
+
+.dir-list {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-main);
+}
+
+.dir-item {
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.2s;
+  user-select: none;
+}
+
+.dir-item:last-child {
+  border-bottom: none;
+}
+
+.dir-item:hover {
+  background-color: var(--bg-elevated);
+}
+
+.dir-item svg {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
 /* Toast Notifications */
 .toast-container {
   position: fixed;

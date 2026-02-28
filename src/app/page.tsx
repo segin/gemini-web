@@ -36,6 +36,10 @@ export default function Home() {
   const [promptDialog, setPromptDialog] = useState<{message: string, placeholder: string, onSubmit: (val: string) => void, onCancel: () => void} | null>(null);
   const [promptInput, setPromptInput] = useState("");
 
+  // Directory Browser State
+  const [showDirBrowser, setShowDirBrowser] = useState(false);
+  const [dirData, setDirData] = useState<{path: string, directories: string[], parentDir: string, hasParent: boolean} | null>(null);
+
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -193,28 +197,41 @@ export default function Home() {
     }
   };
 
+  const fetchDir = async (path?: string) => {
+    try {
+      const url = path ? `/api/fs?dir=${encodeURIComponent(path)}` : "/api/fs";
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.error) {
+        showToast(data.error, 'error');
+      } else {
+        setDirData(data);
+      }
+    } catch (e) {
+      showToast("Failed to fetch directory contents.", 'error');
+    }
+  };
+
   const createSession = () => {
-    setPromptDialog({
-      message: "Enter directory path for new session:",
-      placeholder: "/path/to/project",
-      onSubmit: async (dir) => {
-        setPromptDialog(null);
-        if (!dir) return;
-        try {
-          await fetch("/api/sessions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ directory: dir }),
-          });
-          fetchSessions();
-          showToast(`Session created for ${dir}`, 'success');
-        } catch (e) {
-          console.error(e);
-          showToast("Failed to create session", 'error');
-        }
-      },
-      onCancel: () => setPromptDialog(null)
-    });
+    fetchDir();
+    setShowDirBrowser(true);
+  };
+
+  const handleSelectDirectory = async (dir: string) => {
+    setShowDirBrowser(false);
+    if (!dir) return;
+    try {
+      await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ directory: dir }),
+      });
+      fetchSessions();
+      showToast(`Session created for ${dir}`, 'success');
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to create session", 'error');
+    }
   };
 
   const linkNode = () => {
@@ -501,6 +518,39 @@ export default function Home() {
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => { setPromptInput(""); promptDialog.onCancel(); }}>Cancel</button>
               <button className="btn btn-primary" onClick={() => { promptDialog.onSubmit(promptInput); setPromptInput(""); }}>Submit</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Directory Browser Modal */}
+      {showDirBrowser && dirData && (
+        <div className="overlay" style={{ zIndex: 60 }}>
+          <div className="modal" style={{ maxWidth: '500px', display: 'flex', flexDirection: 'column', height: '80vh' }}>
+            <h3 className="modal-title" style={{ textAlign: 'left' }}>Select Project Directory</h3>
+            <div className="dir-current-path">{dirData.path}</div>
+            
+            <div className="dir-list">
+              {dirData.hasParent && (
+                <div className="dir-item" onClick={() => fetchDir(dirData.parentDir)}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                  <span>.. (Up one level)</span>
+                </div>
+              )}
+              {dirData.directories.map((dir) => (
+                <div key={dir} className="dir-item" onClick={() => fetchDir(`${dirData.path}/${dir}`.replace('//', '/'))}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+                  <span>{dir}</span>
+                </div>
+              ))}
+              {dirData.directories.length === 0 && (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No subdirectories found.</div>
+              )}
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: '1.5rem', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setShowDirBrowser(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => handleSelectDirectory(dirData.path)}>Select This Directory</button>
             </div>
           </div>
         </div>
