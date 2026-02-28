@@ -450,6 +450,33 @@ select.input-field {
   100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 
+/* Loading Indicator */
+.loading-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--accent-primary);
+  font-weight: 500;
+  margin-top: 1rem;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-elevated);
+  width: fit-content;
+}
+
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-radius: 50%;
+  border-top-color: var(--accent-primary);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Utilities */
 .recording-active {
   animation: pulse 2s infinite;

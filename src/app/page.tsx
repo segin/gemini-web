@@ -19,6 +19,7 @@ export default function Home() {
   const [output, setOutput] = useState<string>("");
   const [input, setInput] = useState<string>("");
   const [isRecording, setIsRecording] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
   // Extension management state
@@ -164,6 +165,7 @@ export default function Home() {
   const sendAudio = async (base64Audio: string) => {
     if (!selectedSession) return;
     setOutput((prev) => prev + "\n[Sending audio...]");
+    setIsProcessing(true);
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -175,14 +177,17 @@ export default function Home() {
     } catch (err) {
       console.error(err);
       showToast("Failed to process audio", 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const sendText = async () => {
-    if (!input.trim() || !selectedSession) return;
+    if (!input.trim() || !selectedSession || isProcessing) return;
     const currentInput = input;
     setInput("");
     setOutput((prev) => prev + "\n> " + currentInput);
+    setIsProcessing(true);
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -194,6 +199,8 @@ export default function Home() {
     } catch (err) {
       console.error(err);
       showToast("Failed to send message", 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -444,6 +451,12 @@ export default function Home() {
         ) : (
           <div className="chat-container">
             {output || "Session ready. Type a command or use voice to interact with Gemini CLI."}
+            {isProcessing && (
+              <div className="loading-indicator">
+                <div className="spinner"></div>
+                Gemini is processing...
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -456,15 +469,17 @@ export default function Home() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendText()}
-            placeholder="Message Gemini..."
+            placeholder={isProcessing ? "Wait for response..." : "Message Gemini..."}
+            disabled={isProcessing}
           />
-          <button className="btn btn-primary" onClick={sendText}>
+          <button className="btn btn-primary" onClick={sendText} disabled={isProcessing}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
             <span className="hidden-mobile">Send</span>
           </button>
           <button
             className={`btn ${isRecording ? "btn-danger recording-active" : "btn-secondary"}`}
             onClick={isRecording ? handleStopRecording : handleStartRecording}
+            disabled={isProcessing}
           >
             {isRecording ? (
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="6" height="6" x="9" y="9"/></svg>
