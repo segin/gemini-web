@@ -25,7 +25,6 @@ export async function POST(req: Request) {
 
     if (session.includes(':') && !isLocal) {
       const parts = session.split(':');
-      // Reconstruct URL (e.g., https://example.com:id)
       targetNode = parts.slice(0, -1).join(':');
       sessionId = parts[parts.length - 1];
     } else if (isLocal) {
@@ -49,9 +48,13 @@ export async function POST(req: Request) {
 
     let inputCommand = "";
     if (text) {
-      inputCommand = `gemini "${text.replace(/"/g, '\\"')}"`;
+      inputCommand = `gemini -p "${text.replace(/"/g, '\\"')}"`;
     } else if (audio) {
-      inputCommand = `gemini "Process this audio input"`; 
+      // Save audio to a temporary file
+      const audioBuffer = Buffer.from(audio.split(',')[1], 'base64');
+      const audioPath = path.join(cwd, `input_${Date.now()}.webm`);
+      fs.writeFileSync(audioPath, audioBuffer);
+      inputCommand = `gemini -p "Process the attached audio file: ${audioPath}"`; 
     }
 
     if (!inputCommand) {
