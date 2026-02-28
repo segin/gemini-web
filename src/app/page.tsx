@@ -241,10 +241,8 @@ export default function Home() {
     setInstallingAll(true);
     const results = [];
     
-    // Install local
     results.push(await installExtension(ext, "local"));
     
-    // Install remotes
     for (const node of nodes) {
       results.push(await installExtension(ext, node));
     }
@@ -276,83 +274,100 @@ export default function Home() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", padding: "1rem" }}>
-      <header style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", marginBottom: "1rem", gap: "1rem" }}>
-        <h1 style={{ margin: 0 }}>Gemini Web CLI</h1>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <button onClick={() => setShowExtensions(!showExtensions)} style={{ padding: "0.5rem", backgroundColor: "var(--secondary)", border: "1px solid var(--border)", borderRadius: "4px", color: "var(--foreground)", cursor: "pointer" }}>
-            {showExtensions ? "Back to Chat" : "Extensions"}
+    <div className="app-container">
+      <header className="app-header">
+        <h1 className="app-title">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+          Gemini Web
+        </h1>
+        <div className="app-controls">
+          <button className="btn btn-secondary" onClick={() => setShowExtensions(!showExtensions)}>
+            {showExtensions ? "← Chat" : "Extensions"}
           </button>
+          
           {!showExtensions && (
             <>
-              <button onClick={() => setShowTerminal(!showTerminal)} style={{ padding: "0.5rem", backgroundColor: "var(--secondary)", border: "1px solid var(--border)", borderRadius: "4px", color: "var(--foreground)", cursor: "pointer" }}>
-                {showTerminal ? "Exit Terminal" : "Open Terminal"}
-              </button>
-              <select value={selectedSession} onChange={(e) => setSelectedSession(e.target.value)} style={{ padding: "0.5rem" }}>
-                <option value="" disabled>Select session</option>
+              {selectedSession && (
+                <button className="btn btn-secondary" onClick={() => setShowTerminal(!showTerminal)}>
+                  {showTerminal ? "Chat View" : "Terminal View"}
+                </button>
+              )}
+              <select className="input-field" style={{ width: 'auto' }} value={selectedSession} onChange={(e) => setSelectedSession(e.target.value)}>
+                <option value="" disabled>Select session...</option>
                 {sessions.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                  <option key={s} value={s}>{s.split('/').pop()} ({s})</option>
                 ))}
               </select>
-              <button onClick={createSession} style={{ padding: "0.5rem", backgroundColor: "var(--primary)", border: "none", borderRadius: "4px", color: "var(--background)", cursor: "pointer" }}>New Session</button>
-              <button onClick={detectProjects} style={{ padding: "0.5rem", backgroundColor: "var(--secondary)", border: "1px solid var(--border)", borderRadius: "4px", color: "var(--foreground)", cursor: "pointer" }}>Detect Projects</button>
+              <button className="btn btn-secondary btn-icon" onClick={createSession} title="New Session">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+              <button className="btn btn-secondary btn-icon" onClick={detectProjects} title="Detect Projects">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              </button>
             </>
           )}
-          <button onClick={linkNode} style={{ padding: "0.5rem", backgroundColor: "var(--secondary)", border: "1px solid var(--border)", borderRadius: "4px", color: "var(--foreground)", cursor: "pointer" }}>Link Node</button>
+          <button className="btn btn-secondary btn-icon" onClick={linkNode} title="Link Node">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </button>
         </div>
       </header>
 
-      <main style={{ flex: 1, backgroundColor: "var(--secondary)", borderRadius: "8px", padding: "1rem", overflowY: "auto" }}>
+      <main className="app-main">
         {showExtensions ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
-              <h2>Manage Extensions</h2>
-              <select value={extensionHost} onChange={(e) => setExtensionHost(e.target.value)} style={{ padding: "0.5rem" }}>
-                <option value="local">Local Host</option>
-                {nodes.map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
+          <div>
+            <div className="ext-header">
+              <h2>Extensions</h2>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Host:</span>
+                <select className="input-field" style={{ width: 'auto' }} value={extensionHost} onChange={(e) => setExtensionHost(e.target.value)}>
+                  <option value="local">Local Host</option>
+                  {nodes.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
             </div>
 
-            <section>
-              <h3>Installed Extensions</h3>
-              <ul style={{ listStyle: "none", padding: 0 }}>
-                {installedExtensions.length === 0 ? (
-                  <li>No extensions installed on this host.</li>
-                ) : (
-                  installedExtensions.map((ext, idx) => (
-                    <li key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid var(--border)" }}>
-                      <span>{ext}</span>
-                      <button onClick={() => uninstallExtension(ext)} style={{ color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>Uninstall</button>
-                    </li>
-                  ))
-                )}
-              </ul>
-            </section>
-
-            <section>
-              <h3>Available from geminicli.com</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "1rem" }}>
-                {availableExtensions.map((ext) => (
-                  <div key={ext.id} style={{ border: "1px solid var(--border)", borderRadius: "8px", padding: "1rem", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                      {ext.avatar && <img src={ext.avatar} width="32" height="32" style={{ borderRadius: "4px" }} alt="" />}
-                      <div style={{ overflow: "hidden" }}>
-                        <div style={{ fontWeight: "bold", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>{ext.name}</div>
-                        <div style={{ fontSize: "0.8rem", color: "var(--primary)" }}>{ext.fullName}</div>
-                      </div>
+            {installedExtensions.length > 0 && (
+              <>
+                <h3 className="ext-section-title">Installed</h3>
+                <div className="ext-grid" style={{ marginBottom: '2rem' }}>
+                  {installedExtensions.map((ext, idx) => (
+                    <div key={idx} className="ext-card" style={{ padding: '1rem', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: 600 }}>{ext}</span>
+                      <button className="btn btn-danger" style={{ padding: '0.4rem 0.8rem' }} onClick={() => uninstallExtension(ext)}>Remove</button>
                     </div>
-                    <p style={{ fontSize: "0.9rem", margin: "0.5rem 0", flex: 1 }}>{ext.description}</p>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      <button onClick={() => handleInstallSingle(ext)} style={{ flex: 1, padding: "0.5rem", backgroundColor: "var(--primary)", border: "none", borderRadius: "4px", color: "var(--background)", cursor: "pointer" }}>Install</button>
-                      <button onClick={() => handleInstallAll(ext)} style={{ flex: 1, padding: "0.5rem", backgroundColor: "var(--secondary)", border: "1px solid var(--border)", borderRadius: "4px", color: "var(--foreground)", cursor: "pointer", fontSize: "0.8rem" }}>Install All</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <h3 className="ext-section-title">Gallery (geminicli.com)</h3>
+            <div className="ext-grid">
+              {availableExtensions.map((ext) => (
+                <div key={ext.id} className="ext-card">
+                  <div className="ext-card-header">
+                    {ext.avatar ? (
+                      <img src={ext.avatar} width="40" height="40" className="ext-avatar" alt="" />
+                    ) : (
+                      <div className="ext-avatar" style={{ width: 40, height: 40 }} />
+                    )}
+                    <div className="ext-info">
+                      <div className="ext-name" title={ext.name}>{ext.name}</div>
+                      <div className="ext-fullname" title={ext.fullName}>{ext.fullName}</div>
                     </div>
                   </div>
-                ))}
-              </div>
-            </section>
+                  <p className="ext-desc">{ext.description}</p>
+                  <div className="ext-actions">
+                    <button className="btn btn-primary" onClick={() => handleInstallSingle(ext)}>Install</button>
+                    {nodes.length > 0 && (
+                      <button className="btn btn-secondary" onClick={() => handleInstallAll(ext)}>All Nodes</button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : showTerminal && selectedSession ? (
-          <div style={{ height: "100%", width: "100%" }}>
+          <div className="terminal-container">
             <TerminalView
               sessionId={selectedSession}
               cwd={selectedSession.includes(':') ? '' : selectedSession}
@@ -360,38 +375,54 @@ export default function Home() {
             />
           </div>
         ) : (
-          <div style={{ whiteSpace: "pre-wrap" }}>
-            {output || "No output yet. Start chatting!"}
+          <div className="chat-container">
+            {output || "Session ready. Type a command or use voice to interact with Gemini CLI."}
           </div>
         )}
       </main>
 
       {!showExtensions && !showTerminal && (
-        <footer style={{ display: "flex", marginTop: "1rem", gap: "0.5rem", flexWrap: "wrap" }}>
+        <footer className="app-footer">
           <input
+            className="input-field"
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendText()}
-            style={{ flex: 1, minWidth: "200px", padding: "0.5rem", borderRadius: "4px", border: "1px solid var(--border)", backgroundColor: "var(--background)", color: "var(--foreground)" }}
-            placeholder="Type a command or message..."
+            placeholder="Message Gemini..."
           />
-          <button onClick={sendText} style={{ padding: "0.5rem 1rem", backgroundColor: "var(--primary)", color: "var(--background)", border: "none", borderRadius: "4px", cursor: "pointer" }}>
-            Send
+          <button className="btn btn-primary" onClick={sendText}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            <span className="hidden-mobile">Send</span>
           </button>
           <button
+            className={`btn ${isRecording ? "btn-danger recording-active" : "btn-secondary"}`}
             onClick={isRecording ? handleStopRecording : handleStartRecording}
-            style={{ padding: "0.5rem 1rem", backgroundColor: isRecording ? "var(--accent)" : "var(--secondary)", color: "var(--foreground)", border: "none", borderRadius: "4px", cursor: "pointer" }}
           >
-            {isRecording ? "Stop Voice" : "Record Voice"}
+            {isRecording ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="6" height="6" x="9" y="9"/></svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+            )}
+            <span className="hidden-mobile">{isRecording ? "Stop" : "Voice"}</span>
           </button>
         </footer>
       )}
+
       {installingAll && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-          <div style={{ padding: "2rem", background: "var(--secondary)", borderRadius: "8px" }}>Installing on all hosts... Please wait.</div>
+        <div className="overlay">
+          <div className="modal">
+            <h3 className="modal-title">Installing...</h3>
+            <p className="modal-desc">Deploying extension across all linked nodes.</p>
+          </div>
         </div>
       )}
+      
+      <style jsx>{`
+        @media (max-width: 600px) {
+          .hidden-mobile { display: none; }
+        }
+      `}</style>
     </div>
   );
 }

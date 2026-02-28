@@ -66,25 +66,12 @@ const TerminalView: React.FC<TerminalViewProps> = ({ sessionId, cwd, onClose }) 
   }, [sessionId, cwd]);
 
   return (
-    <div style={{ position: "relative", height: "100%", backgroundColor: "#1e1e2e", borderRadius: "8px", padding: "10px", overflow: "hidden" }}>
-      <button
-        onClick={onClose}
-        style={{
-          position: "absolute",
-          top: "5px",
-          right: "5px",
-          zIndex: 10,
-          background: "#f38ba8",
-          border: "none",
-          borderRadius: "4px",
-          color: "white",
-          cursor: "pointer",
-          padding: "2px 8px",
-        }}
-      >
+    <div style={{ position: "relative", height: "100%", overflow: "hidden" }}>
+      <button className="btn btn-secondary terminal-header-btn" onClick={onClose}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         Close Terminal
       </button>
-      <div ref={terminalRef} style={{ height: "100%" }} />
+      <div ref={terminalRef} style={{ height: "100%", width: "100%", padding: "12px 12px 12px 16px" }} />
     </div>
   );
 };

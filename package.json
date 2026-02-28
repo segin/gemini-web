@@ -8,6 +8,7 @@
     "dev": "next dev -p 3045 --webpack",
     "build": "next build --webpack",
     "start": "next start -p 3045",
+    "service": "node service/index.js",
     "lint": "next lint"
   },
   "keywords": [],
