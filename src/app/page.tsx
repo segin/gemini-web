@@ -24,6 +24,7 @@ export default function Home() {
   const [extensionHost, setExtensionHost] = useState<string>("local");
   const [showExtensions, setShowExtensions] = useState(false);
   const [nodes, setNodes] = useState<string[]>([]);
+  const [installingAll, setInstallingAll] = useState(false);
 
   useEffect(() => {
     fetchSessions();
@@ -183,24 +184,48 @@ export default function Home() {
     }
   };
 
-  const installExtension = async (ext: Extension) => {
-    if (!confirm(`Install ${ext.name}?`)) return;
+  const installExtension = async (ext: Extension, host: string = extensionHost) => {
     try {
       const res = await fetch("/api/extensions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "install", host: extensionHost, extensionUrl: ext.installUrl }),
+        body: JSON.stringify({ action: "install", host, extensionUrl: ext.installUrl }),
       });
-      const data = await res.json();
-      if (data.success) {
-        alert("Installed successfully!");
-        fetchInstalledExtensions(extensionHost);
-      } else {
-        alert("Failed to install: " + (data.error || "Unknown error"));
-      }
+      return await res.json();
     } catch (e) {
       console.error(e);
+      return { error: String(e) };
     }
+  };
+
+  const handleInstallSingle = async (ext: Extension) => {
+    if (!confirm(`Install ${ext.name}?`)) return;
+    const data = await installExtension(ext);
+    if (data.success) {
+      alert("Installed successfully!");
+      fetchInstalledExtensions(extensionHost);
+    } else {
+      alert("Failed to install: " + (data.error || "Unknown error"));
+    }
+  };
+
+  const handleInstallAll = async (ext: Extension) => {
+    if (!confirm(`Install ${ext.name} on all nodes (local + ${nodes.length} nodes)?`)) return;
+    setInstallingAll(true);
+    const results = [];
+    
+    // Install local
+    results.push(await installExtension(ext, "local"));
+    
+    // Install remotes
+    for (const node of nodes) {
+      results.push(await installExtension(ext, node));
+    }
+    
+    setInstallingAll(false);
+    const successes = results.filter(r => r.success).length;
+    alert(`Installed on ${successes}/${results.length} nodes.`);
+    fetchInstalledExtensions(extensionHost);
   };
 
   const uninstallExtension = async (name: string) => {
@@ -286,7 +311,10 @@ export default function Home() {
                       </div>
                     </div>
                     <p style={{ fontSize: "0.9rem", margin: "0.5rem 0", flex: 1 }}>{ext.description}</p>
-                    <button onClick={() => installExtension(ext)} style={{ padding: "0.5rem", backgroundColor: "var(--primary)", border: "none", borderRadius: "4px", color: "var(--background)", cursor: "pointer" }}>Install</button>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <button onClick={() => handleInstallSingle(ext)} style={{ flex: 1, padding: "0.5rem", backgroundColor: "var(--primary)", border: "none", borderRadius: "4px", color: "var(--background)", cursor: "pointer" }}>Install</button>
+                      <button onClick={() => handleInstallAll(ext)} style={{ flex: 1, padding: "0.5rem", backgroundColor: "var(--secondary)", border: "1px solid var(--border)", borderRadius: "4px", color: "var(--foreground)", cursor: "pointer", fontSize: "0.8rem" }}>Install All</button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -319,6 +347,11 @@ export default function Home() {
             {isRecording ? "Stop Voice" : "Record Voice"}
           </button>
         </footer>
+      )}
+      {installingAll && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div style={{ padding: "2rem", background: "var(--secondary)", borderRadius: "8px" }}>Installing on all hosts... Please wait.</div>
+        </div>
       )}
     </div>
   );
