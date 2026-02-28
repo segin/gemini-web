@@ -22,6 +22,11 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
+  // Streaming & Queuing State
+  const [messageQueue, setMessageQueue] = useState<{text?: string, audio?: string}[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   // Extension management state
   const [availableExtensions, setAvailableExtensions] = useState<Extension[]>([]);
   const [installedExtensions, setInstalledExtensions] = useState<string[]>([]);
@@ -52,6 +57,74 @@ export default function Home() {
     fetchNodes();
     fetchAvailableExtensions();
   }, []);
+
+  // Queue processing effect
+  useEffect(() => {
+    if (!isProcessing && messageQueue.length > 0 && selectedSession) {
+      processNextMessage();
+    }
+  }, [messageQueue, isProcessing, selectedSession]);
+
+  // Auto-scroll chat
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [output, isProcessing]);
+
+  const processNextMessage = async () => {
+    const msg = messageQueue[0];
+    setMessageQueue(prev => prev.slice(1));
+    setIsProcessing(true);
+    
+    abortControllerRef.current = new AbortController();
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: selectedSession, ...msg }),
+        signal: abortControllerRef.current.signal
+      });
+
+      if (!res.ok) {
+         const err = await res.json();
+         throw new Error(err.error || "Request failed");
+      }
+
+      if (res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) {
+            const chunk = decoder.decode(value, { stream: !done });
+            setOutput(prev => prev + chunk);
+          }
+        }
+      }
+      setOutput(prev => prev + "\n");
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setOutput(prev => prev + "\n\n[Agent Interrupted]\n");
+        showToast("Agent process interrupted", 'info');
+      } else {
+        console.error(err);
+        showToast(`Error: ${err.message}`, 'error');
+      }
+    } finally {
+      setIsProcessing(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleInterrupt = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  };
 
   const fetchSessions = async () => {
     try {
@@ -142,7 +215,7 @@ export default function Home() {
         reader.readAsDataURL(audioBlob);
         reader.onloadend = async () => {
           const base64Audio = reader.result?.toString() || "";
-          await sendAudio(base64Audio);
+          sendAudio(base64Audio);
         };
         stream.getTracks().forEach((track) => track.stop());
       };
@@ -162,46 +235,20 @@ export default function Home() {
     }
   };
 
-  const sendAudio = async (base64Audio: string) => {
+  const sendAudio = (base64Audio: string) => {
     if (!selectedSession) return;
-    setOutput((prev) => prev + "\n[Sending audio...]");
-    setIsProcessing(true);
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session: selectedSession, audio: base64Audio }),
-      });
-      const data = await res.json();
-      setOutput((prev) => prev + "\n" + (data.response || data.error));
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to process audio", 'error');
-    } finally {
-      setIsProcessing(false);
-    }
+    const qLen = messageQueue.length;
+    setOutput((prev) => prev + `\n> [Audio Input]${qLen > 0 || isProcessing ? ' (Queued)' : ''}\n`);
+    setMessageQueue(prev => [...prev, { audio: base64Audio }]);
   };
 
-  const sendText = async () => {
-    if (!input.trim() || !selectedSession || isProcessing) return;
+  const sendText = () => {
+    if (!input.trim() || !selectedSession) return;
     const currentInput = input;
     setInput("");
-    setOutput((prev) => prev + "\n> " + currentInput);
-    setIsProcessing(true);
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session: selectedSession, text: currentInput }),
-      });
-      const data = await res.json();
-      setOutput((prev) => prev + "\n" + (data.response || data.error));
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to send message", 'error');
-    } finally {
-      setIsProcessing(false);
-    }
+    const qLen = messageQueue.length;
+    setOutput((prev) => prev + `\n> ${currentInput}${qLen > 0 || isProcessing ? ' (Queued)' : ''}\n`);
+    setMessageQueue(prev => [...prev, { text: currentInput }]);
   };
 
   const fetchDir = async (path?: string) => {
@@ -457,6 +504,7 @@ export default function Home() {
                 Gemini is processing...
               </div>
             )}
+            <div ref={chatEndRef} />
           </div>
         )}
       </main>
@@ -469,17 +517,15 @@ export default function Home() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendText()}
-            placeholder={isProcessing ? "Wait for response..." : "Message Gemini..."}
-            disabled={isProcessing}
+            placeholder="Message Gemini... (Queues if busy)"
           />
-          <button className="btn btn-primary" onClick={sendText} disabled={isProcessing}>
+          <button className="btn btn-primary" onClick={sendText}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
             <span className="hidden-mobile">Send</span>
           </button>
           <button
             className={`btn ${isRecording ? "btn-danger recording-active" : "btn-secondary"}`}
             onClick={isRecording ? handleStopRecording : handleStartRecording}
-            disabled={isProcessing}
           >
             {isRecording ? (
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="6" height="6" x="9" y="9"/></svg>
@@ -488,6 +534,12 @@ export default function Home() {
             )}
             <span className="hidden-mobile">{isRecording ? "Stop" : "Voice"}</span>
           </button>
+          {isProcessing && (
+            <button className="btn btn-danger" onClick={handleInterrupt} title="Interrupt Agent">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="6" height="6" x="9" y="9"/></svg>
+              <span className="hidden-mobile">Interrupt</span>
+            </button>
+          )}
         </footer>
       )}
 

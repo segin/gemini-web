@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
-import { exec } from "child_process";
-import util from "util";
+import { spawn } from "child_process";
 import fs from 'fs';
 import path from 'path';
 
-const execPromise = util.promisify(exec);
 const SESSION_FILE = path.join(process.cwd(), 'sessions.json');
 
 function getSessions() {
@@ -32,48 +30,95 @@ export async function POST(req: Request) {
     }
 
     if (targetNode) {
-      // Forward request to remote node
+      // Forward request to remote node as stream
       const remoteRes = await fetch(`${targetNode}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session: `local:${sessionId}`, text, audio })
+        body: JSON.stringify({ session: `local:${sessionId}`, text, audio }),
+        // @ts-ignore
+        duplex: 'half'
       });
-      const data = await remoteRes.json();
-      return NextResponse.json(data);
+      return new Response(remoteRes.body, {
+        headers: { 'Content-Type': 'text/plain' }
+      });
     }
 
     // Local execution
     const sessions = getSessions();
     const cwd = sessions[sessionId] || process.cwd();
 
-    let inputCommand = "";
-    const resumeFlag = "--resume latest";
+    let args = ['-p'];
+    const resumeFlag = "--resume";
+    const resumeValue = "latest";
 
     if (text) {
-      inputCommand = `gemini -p "${text.replace(/"/g, '\\"')}" ${resumeFlag}`;
+      args.push(text, resumeFlag, resumeValue);
     } else if (audio) {
       const audioBuffer = Buffer.from(audio.split(',')[1], 'base64');
       const audioPath = path.join(cwd, `input_${Date.now()}.webm`);
       fs.writeFileSync(audioPath, audioBuffer);
-      inputCommand = `gemini -p "Process the attached audio file: ${audioPath}" ${resumeFlag}`; 
-    }
-
-    if (!inputCommand) {
+      args.push(`Process the attached audio file: ${audioPath}`, resumeFlag, resumeValue);
+    } else {
       return NextResponse.json({ error: "No input provided" }, { status: 400 });
     }
 
-    try {
-      const { stdout, stderr } = await execPromise(inputCommand, { cwd });
-      return NextResponse.json({ response: stdout || stderr });
-    } catch (err: any) {
-      // If --resume latest failed because no session exists, try without it
-      if (err.message.includes("latest") || err.message.includes("No session found")) {
-        const freshCommand = inputCommand.replace(resumeFlag, "");
-        const { stdout, stderr } = await execPromise(freshCommand, { cwd });
-        return NextResponse.json({ response: stdout || stderr });
+    const proc = spawn('gemini', args, { cwd, env: { ...process.env, FORCE_COLOR: '1' } });
+    
+    const stream = new ReadableStream({
+      start(controller) {
+        let stdoutData = "";
+        let stderrData = "";
+        let fallbackTriggered = false;
+
+        proc.stdout.on('data', (chunk) => {
+          stdoutData += chunk.toString();
+          controller.enqueue(chunk);
+        });
+
+        proc.stderr.on('data', (chunk) => {
+          stderrData += chunk.toString();
+          controller.enqueue(chunk);
+        });
+
+        proc.on('close', (code) => {
+          if (code !== 0 && (stderrData.includes('latest') || stderrData.includes('No session found') || stderrData.includes('ENOENT'))) {
+             // try fallback without --resume latest
+             fallbackTriggered = true;
+             const fallbackArgs = args.filter(a => a !== resumeFlag && a !== resumeValue);
+             const proc2 = spawn('gemini', fallbackArgs, { cwd, env: { ...process.env, FORCE_COLOR: '1' } });
+             
+             proc2.stdout.on('data', (c) => controller.enqueue(c));
+             proc2.stderr.on('data', (c) => controller.enqueue(c));
+             proc2.on('close', () => controller.close());
+             proc2.on('error', (err) => {
+                controller.enqueue(Buffer.from(`\nError: ${err.message}`));
+                controller.close();
+             });
+             
+             req.signal.addEventListener('abort', () => proc2.kill());
+          } else if (!fallbackTriggered) {
+             controller.close();
+          }
+        });
+
+        proc.on('error', (err) => {
+          controller.enqueue(Buffer.from(`\nError: ${err.message}`));
+          controller.close();
+        });
+
+        req.signal.addEventListener('abort', () => {
+          proc.kill();
+        });
+      },
+      cancel() {
+        proc.kill();
       }
-      throw err;
-    }
+    });
+
+    return new Response(stream, {
+      headers: { 'Content-Type': 'text/plain' }
+    });
+
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Unknown error" }, { status: 500 });
   }
