@@ -52,14 +52,16 @@ export async function POST(req: Request) {
     const resumeValue = "latest";
     const outputFormatFlag = "-o";
     const outputFormatValue = "stream-json";
+    const modelFlag = "-m";
+    const modelValue = "auto-gemini-3";
 
     if (text) {
-      args.push(text, resumeFlag, resumeValue, outputFormatFlag, outputFormatValue);
+      args.push(text, resumeFlag, resumeValue, outputFormatFlag, outputFormatValue, modelFlag, modelValue);
     } else if (audio) {
       const audioBuffer = Buffer.from(audio.split(',')[1], 'base64');
       const audioPath = path.join(cwd, `input_${Date.now()}.webm`);
       fs.writeFileSync(audioPath, audioBuffer);
-      args.push(`Process the attached audio file: ${audioPath}`, resumeFlag, resumeValue, outputFormatFlag, outputFormatValue);
+      args.push(`Process the attached audio file: ${audioPath}`, resumeFlag, resumeValue, outputFormatFlag, outputFormatValue, modelFlag, modelValue);
     } else {
       return NextResponse.json({ error: "No input provided" }, { status: 400 });
     }
