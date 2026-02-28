@@ -30,6 +30,18 @@ export default function Home() {
   const [installingAll, setInstallingAll] = useState(false);
   const [showTerminal, setShowTerminal] = useState(false);
 
+  // UI State: Toasts & Modals
+  const [toasts, setToasts] = useState<{id: number, message: string, type: 'success' | 'error' | 'info'}[]>([]);
+  const [confirmDialog, setConfirmDialog] = useState<{message: string, onConfirm: () => void, onCancel: () => void} | null>(null);
+  const [promptDialog, setPromptDialog] = useState<{message: string, placeholder: string, onSubmit: (val: string) => void, onCancel: () => void} | null>(null);
+  const [promptInput, setPromptInput] = useState("");
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+  };
+
   useEffect(() => {
     fetchSessions();
     fetchNodes();
@@ -62,13 +74,13 @@ export default function Home() {
           });
         }
         fetchSessions();
-        alert(`Detected and added ${data.detected.length} projects.`);
+        showToast(`Detected and added ${data.detected.length} projects.`, 'success');
       } else {
-        alert("No existing Gemini projects found in home directory.");
+        showToast("No existing Gemini projects found in home directory.", 'info');
       }
     } catch (e) {
       console.error(e);
-      alert("Failed to scan for projects.");
+      showToast("Failed to scan for projects.", 'error');
     }
   };
 
@@ -134,6 +146,7 @@ export default function Home() {
       setIsRecording(true);
     } catch (err) {
       console.error("Microphone error", err);
+      showToast("Microphone access denied or failed.", 'error');
     }
   };
 
@@ -157,6 +170,7 @@ export default function Home() {
       setOutput((prev) => prev + "\n" + (data.response || data.error));
     } catch (err) {
       console.error(err);
+      showToast("Failed to process audio", 'error');
     }
   };
 
@@ -175,40 +189,57 @@ export default function Home() {
       setOutput((prev) => prev + "\n" + (data.response || data.error));
     } catch (err) {
       console.error(err);
+      showToast("Failed to send message", 'error');
     }
   };
 
-  const createSession = async () => {
-    const dir = prompt("Enter directory path for new session:");
-    if (!dir) return;
-    try {
-      await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ directory: dir }),
-      });
-      fetchSessions();
-    } catch (e) {
-      console.error(e);
-    }
+  const createSession = () => {
+    setPromptDialog({
+      message: "Enter directory path for new session:",
+      placeholder: "/path/to/project",
+      onSubmit: async (dir) => {
+        setPromptDialog(null);
+        if (!dir) return;
+        try {
+          await fetch("/api/sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ directory: dir }),
+          });
+          fetchSessions();
+          showToast(`Session created for ${dir}`, 'success');
+        } catch (e) {
+          console.error(e);
+          showToast("Failed to create session", 'error');
+        }
+      },
+      onCancel: () => setPromptDialog(null)
+    });
   };
 
-  const linkNode = async () => {
-    const url = prompt("Enter the URL of another Gemini Web Node:");
-    if (!url) return;
-    try {
-      await fetch("/api/nodes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-      fetchNodes();
-      fetchSessions();
-      alert("Node linked successfully!");
-    } catch (e) {
-      console.error(e);
-      alert("Failed to link node.");
-    }
+  const linkNode = () => {
+    setPromptDialog({
+      message: "Enter the URL of another Gemini Web Node:",
+      placeholder: "http://192.168.1.10:3045",
+      onSubmit: async (url) => {
+        setPromptDialog(null);
+        if (!url) return;
+        try {
+          await fetch("/api/nodes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+          });
+          fetchNodes();
+          fetchSessions();
+          showToast("Node linked successfully!", 'success');
+        } catch (e) {
+          console.error(e);
+          showToast("Failed to link node.", 'error');
+        }
+      },
+      onCancel: () => setPromptDialog(null)
+    });
   };
 
   const installExtension = async (ext: Extension, host: string = extensionHost) => {
@@ -225,52 +256,71 @@ export default function Home() {
     }
   };
 
-  const handleInstallSingle = async (ext: Extension) => {
-    if (!confirm(`Install ${ext.name}?`)) return;
-    const data = await installExtension(ext);
-    if (data.success) {
-      alert("Installed successfully!");
-      fetchInstalledExtensions(extensionHost);
-    } else {
-      alert("Failed to install: " + (data.error || "Unknown error"));
-    }
+  const handleInstallSingle = (ext: Extension) => {
+    setConfirmDialog({
+      message: `Are you sure you want to install ${ext.name}?`,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        const data = await installExtension(ext);
+        if (data.success) {
+          showToast(`${ext.name} installed successfully!`, 'success');
+          fetchInstalledExtensions(extensionHost);
+        } else {
+          showToast(`Failed to install: ${data.error || "Unknown error"}`, 'error');
+        }
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
   };
 
-  const handleInstallAll = async (ext: Extension) => {
-    if (!confirm(`Install ${ext.name} on all nodes (local + ${nodes.length} nodes)?`)) return;
-    setInstallingAll(true);
-    const results = [];
-    
-    results.push(await installExtension(ext, "local"));
-    
-    for (const node of nodes) {
-      results.push(await installExtension(ext, node));
-    }
-    
-    setInstallingAll(false);
-    const successes = results.filter(r => r.success).length;
-    alert(`Installed on ${successes}/${results.length} nodes.`);
-    fetchInstalledExtensions(extensionHost);
-  };
-
-  const uninstallExtension = async (name: string) => {
-    if (!confirm(`Uninstall ${name}?`)) return;
-    try {
-      const res = await fetch("/api/extensions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "uninstall", host: extensionHost, extensionName: name }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert("Uninstalled successfully!");
+  const handleInstallAll = (ext: Extension) => {
+    setConfirmDialog({
+      message: `Install ${ext.name} on all nodes (local + ${nodes.length} nodes)?`,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setInstallingAll(true);
+        const results = [];
+        
+        results.push(await installExtension(ext, "local"));
+        
+        for (const node of nodes) {
+          results.push(await installExtension(ext, node));
+        }
+        
+        setInstallingAll(false);
+        const successes = results.filter(r => r.success).length;
+        showToast(`Installed on ${successes}/${results.length} nodes.`, 'success');
         fetchInstalledExtensions(extensionHost);
-      } else {
-        alert("Failed to uninstall: " + (data.error || "Unknown error"));
-      }
-    } catch (e) {
-      console.error(e);
-    }
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
+  };
+
+  const uninstallExtension = (name: string) => {
+    setConfirmDialog({
+      message: `Are you sure you want to uninstall ${name}?`,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const res = await fetch("/api/extensions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "uninstall", host: extensionHost, extensionName: name }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast(`${name} uninstalled successfully!`, 'success');
+            fetchInstalledExtensions(extensionHost);
+          } else {
+            showToast(`Failed to uninstall: ${data.error || "Unknown error"}`, 'error');
+          }
+        } catch (e) {
+          console.error(e);
+          showToast("Network error during uninstall.", 'error');
+        }
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
   };
 
   return (
@@ -417,6 +467,56 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Custom Confirmation Modal */}
+      {confirmDialog && (
+        <div className="overlay" style={{ zIndex: 60 }}>
+          <div className="modal">
+            <h3 className="modal-title">Confirm Action</h3>
+            <p className="modal-desc">{confirmDialog.message}</p>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={confirmDialog.onCancel}>Cancel</button>
+              <button className="btn btn-primary" onClick={confirmDialog.onConfirm}>Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Prompt Modal */}
+      {promptDialog && (
+        <div className="overlay" style={{ zIndex: 60 }}>
+          <div className="modal">
+            <h3 className="modal-title">Input Required</h3>
+            <p className="modal-desc" style={{ marginBottom: '1rem' }}>{promptDialog.message}</p>
+            <input 
+              type="text" 
+              className="input-field" 
+              style={{ marginBottom: '1.5rem', textAlign: 'center' }}
+              placeholder={promptDialog.placeholder}
+              value={promptInput}
+              onChange={(e) => setPromptInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && promptDialog.onSubmit(promptInput)}
+              autoFocus
+            />
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => { setPromptInput(""); promptDialog.onCancel(); }}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => { promptDialog.onSubmit(promptInput); setPromptInput(""); }}>Submit</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Container */}
+      <div className="toast-container">
+        {toasts.map(toast => (
+          <div key={toast.id} className={`toast ${toast.type}`}>
+            {toast.type === 'success' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>}
+            {toast.type === 'error' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>}
+            {toast.type === 'info' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>}
+            {toast.message}
+          </div>
+        ))}
+      </div>
       
       <style jsx>{`
         @media (max-width: 600px) {
