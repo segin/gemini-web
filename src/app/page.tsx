@@ -1,6 +1,15 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 
+interface Extension {
+  id: string;
+  name: string;
+  description: string;
+  fullName: string;
+  installUrl: string;
+  avatar?: string;
+}
+
 export default function Home() {
   const [sessions, setSessions] = useState<string[]>([]);
   const [selectedSession, setSelectedSession] = useState<string>("");
@@ -9,8 +18,17 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
+  // Extension management state
+  const [availableExtensions, setAvailableExtensions] = useState<Extension[]>([]);
+  const [installedExtensions, setInstalledExtensions] = useState<string[]>([]);
+  const [extensionHost, setExtensionHost] = useState<string>("local");
+  const [showExtensions, setShowExtensions] = useState(false);
+  const [nodes, setNodes] = useState<string[]>([]);
+
   useEffect(() => {
     fetchSessions();
+    fetchNodes();
+    fetchAvailableExtensions();
   }, []);
 
   const fetchSessions = async () => {
@@ -25,6 +43,42 @@ export default function Home() {
       console.error(e);
     }
   };
+
+  const fetchNodes = async () => {
+    try {
+      const res = await fetch("/api/nodes");
+      const data = await res.json();
+      setNodes(data.nodes || []);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchAvailableExtensions = async () => {
+    try {
+      const res = await fetch("/api/extensions?type=available");
+      const data = await res.json();
+      setAvailableExtensions(data.extensions || []);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchInstalledExtensions = async (host: string) => {
+    try {
+      const res = await fetch(`/api/extensions?type=installed&host=${host}`);
+      const data = await res.json();
+      setInstalledExtensions(data.extensions || []);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    if (showExtensions) {
+      fetchInstalledExtensions(extensionHost);
+    }
+  }, [showExtensions, extensionHost]);
 
   const handleStartRecording = async () => {
     try {
@@ -120,6 +174,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
       });
+      fetchNodes();
       fetchSessions();
       alert("Node linked successfully!");
     } catch (e) {
@@ -128,45 +183,143 @@ export default function Home() {
     }
   };
 
+  const installExtension = async (ext: Extension) => {
+    if (!confirm(`Install ${ext.name}?`)) return;
+    try {
+      const res = await fetch("/api/extensions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "install", host: extensionHost, extensionUrl: ext.installUrl }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Installed successfully!");
+        fetchInstalledExtensions(extensionHost);
+      } else {
+        alert("Failed to install: " + (data.error || "Unknown error"));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const uninstallExtension = async (name: string) => {
+    if (!confirm(`Uninstall ${name}?`)) return;
+    try {
+      const res = await fetch("/api/extensions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "uninstall", host: extensionHost, extensionName: name }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Uninstalled successfully!");
+        fetchInstalledExtensions(extensionHost);
+      } else {
+        alert("Failed to uninstall: " + (data.error || "Unknown error"));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", padding: "1rem" }}>
       <header style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", marginBottom: "1rem", gap: "1rem" }}>
         <h1 style={{ margin: 0 }}>Gemini Web CLI</h1>
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <select value={selectedSession} onChange={(e) => setSelectedSession(e.target.value)} style={{ padding: "0.5rem" }}>
-            <option value="" disabled>Select session</option>
-            {sessions.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          <button onClick={createSession} style={{ padding: "0.5rem", backgroundColor: "var(--primary)", border: "none", borderRadius: "4px", color: "var(--background)", cursor: "pointer" }}>New Session</button>
+          <button onClick={() => setShowExtensions(!showExtensions)} style={{ padding: "0.5rem", backgroundColor: "var(--secondary)", border: "1px solid var(--border)", borderRadius: "4px", color: "var(--foreground)", cursor: "pointer" }}>
+            {showExtensions ? "Back to Chat" : "Extensions"}
+          </button>
+          {!showExtensions && (
+            <>
+              <select value={selectedSession} onChange={(e) => setSelectedSession(e.target.value)} style={{ padding: "0.5rem" }}>
+                <option value="" disabled>Select session</option>
+                {sessions.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <button onClick={createSession} style={{ padding: "0.5rem", backgroundColor: "var(--primary)", border: "none", borderRadius: "4px", color: "var(--background)", cursor: "pointer" }}>New Session</button>
+            </>
+          )}
           <button onClick={linkNode} style={{ padding: "0.5rem", backgroundColor: "var(--secondary)", border: "1px solid var(--border)", borderRadius: "4px", color: "var(--foreground)", cursor: "pointer" }}>Link Node</button>
         </div>
       </header>
 
-      <main style={{ flex: 1, backgroundColor: "var(--secondary)", borderRadius: "8px", padding: "1rem", overflowY: "auto", whiteSpace: "pre-wrap" }}>
-        {output || "No output yet. Start chatting!"}
+      <main style={{ flex: 1, backgroundColor: "var(--secondary)", borderRadius: "8px", padding: "1rem", overflowY: "auto" }}>
+        {showExtensions ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+              <h2>Manage Extensions</h2>
+              <select value={extensionHost} onChange={(e) => setExtensionHost(e.target.value)} style={{ padding: "0.5rem" }}>
+                <option value="local">Local Host</option>
+                {nodes.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+
+            <section>
+              <h3>Installed Extensions</h3>
+              <ul style={{ listStyle: "none", padding: 0 }}>
+                {installedExtensions.length === 0 ? (
+                  <li>No extensions installed on this host.</li>
+                ) : (
+                  installedExtensions.map((ext, idx) => (
+                    <li key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid var(--border)" }}>
+                      <span>{ext}</span>
+                      <button onClick={() => uninstallExtension(ext)} style={{ color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>Uninstall</button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </section>
+
+            <section>
+              <h3>Available from geminicli.com</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "1rem" }}>
+                {availableExtensions.map((ext) => (
+                  <div key={ext.id} style={{ border: "1px solid var(--border)", borderRadius: "8px", padding: "1rem", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                      {ext.avatar && <img src={ext.avatar} width="32" height="32" style={{ borderRadius: "4px" }} alt="" />}
+                      <div style={{ overflow: "hidden" }}>
+                        <div style={{ fontWeight: "bold", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>{ext.name}</div>
+                        <div style={{ fontSize: "0.8rem", color: "var(--primary)" }}>{ext.fullName}</div>
+                      </div>
+                    </div>
+                    <p style={{ fontSize: "0.9rem", margin: "0.5rem 0", flex: 1 }}>{ext.description}</p>
+                    <button onClick={() => installExtension(ext)} style={{ padding: "0.5rem", backgroundColor: "var(--primary)", border: "none", borderRadius: "4px", color: "var(--background)", cursor: "pointer" }}>Install</button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        ) : (
+          <div style={{ whiteSpace: "pre-wrap" }}>
+            {output || "No output yet. Start chatting!"}
+          </div>
+        )}
       </main>
 
-      <footer style={{ display: "flex", marginTop: "1rem", gap: "0.5rem", flexWrap: "wrap" }}>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendText()}
-          style={{ flex: 1, minWidth: "200px", padding: "0.5rem", borderRadius: "4px", border: "1px solid var(--border)", backgroundColor: "var(--background)", color: "var(--foreground)" }}
-          placeholder="Type a command or message..."
-        />
-        <button onClick={sendText} style={{ padding: "0.5rem 1rem", backgroundColor: "var(--primary)", color: "var(--background)", border: "none", borderRadius: "4px", cursor: "pointer" }}>
-          Send
-        </button>
-        <button
-          onClick={isRecording ? handleStopRecording : handleStartRecording}
-          style={{ padding: "0.5rem 1rem", backgroundColor: isRecording ? "var(--accent)" : "var(--secondary)", color: "var(--foreground)", border: "none", borderRadius: "4px", cursor: "pointer" }}
-        >
-          {isRecording ? "Stop Voice" : "Record Voice"}
-        </button>
-      </footer>
+      {!showExtensions && (
+        <footer style={{ display: "flex", marginTop: "1rem", gap: "0.5rem", flexWrap: "wrap" }}>
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendText()}
+            style={{ flex: 1, minWidth: "200px", padding: "0.5rem", borderRadius: "4px", border: "1px solid var(--border)", backgroundColor: "var(--background)", color: "var(--foreground)" }}
+            placeholder="Type a command or message..."
+          />
+          <button onClick={sendText} style={{ padding: "0.5rem 1rem", backgroundColor: "var(--primary)", color: "var(--background)", border: "none", borderRadius: "4px", cursor: "pointer" }}>
+            Send
+          </button>
+          <button
+            onClick={isRecording ? handleStopRecording : handleStartRecording}
+            style={{ padding: "0.5rem 1rem", backgroundColor: isRecording ? "var(--accent)" : "var(--secondary)", color: "var(--foreground)", border: "none", borderRadius: "4px", cursor: "pointer" }}
+          >
+            {isRecording ? "Stop Voice" : "Record Voice"}
+          </button>
+        </footer>
+      )}
     </div>
   );
 }
