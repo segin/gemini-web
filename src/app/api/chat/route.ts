@@ -47,23 +47,33 @@ export async function POST(req: Request) {
     const cwd = sessions[sessionId] || process.cwd();
 
     let inputCommand = "";
+    const resumeFlag = "--resume latest";
+
     if (text) {
-      inputCommand = `gemini -p "${text.replace(/"/g, '\\"')}"`;
+      inputCommand = `gemini -p "${text.replace(/"/g, '\\"')}" ${resumeFlag}`;
     } else if (audio) {
-      // Save audio to a temporary file
       const audioBuffer = Buffer.from(audio.split(',')[1], 'base64');
       const audioPath = path.join(cwd, `input_${Date.now()}.webm`);
       fs.writeFileSync(audioPath, audioBuffer);
-      inputCommand = `gemini -p "Process the attached audio file: ${audioPath}"`; 
+      inputCommand = `gemini -p "Process the attached audio file: ${audioPath}" ${resumeFlag}`; 
     }
 
     if (!inputCommand) {
       return NextResponse.json({ error: "No input provided" }, { status: 400 });
     }
 
-    const { stdout, stderr } = await execPromise(inputCommand, { cwd });
-    
-    return NextResponse.json({ response: stdout || stderr });
+    try {
+      const { stdout, stderr } = await execPromise(inputCommand, { cwd });
+      return NextResponse.json({ response: stdout || stderr });
+    } catch (err: any) {
+      // If --resume latest failed because no session exists, try without it
+      if (err.message.includes("latest") || err.message.includes("No session found")) {
+        const freshCommand = inputCommand.replace(resumeFlag, "");
+        const { stdout, stderr } = await execPromise(freshCommand, { cwd });
+        return NextResponse.json({ response: stdout || stderr });
+      }
+      throw err;
+    }
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Unknown error" }, { status: 500 });
   }

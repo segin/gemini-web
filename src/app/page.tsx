@@ -45,6 +45,29 @@ export default function Home() {
     }
   };
 
+  const detectProjects = async () => {
+    try {
+      const res = await fetch("/api/detect");
+      const data = await res.json();
+      if (data.detected && data.detected.length > 0) {
+        for (const dir of data.detected) {
+          await fetch("/api/sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ directory: dir }),
+          });
+        }
+        fetchSessions();
+        alert(`Detected and added ${data.detected.length} projects.`);
+      } else {
+        alert("No existing Gemini projects found in home directory.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to scan for projects.");
+    }
+  };
+
   const fetchNodes = async () => {
     try {
       const res = await fetch("/api/nodes");
@@ -265,6 +288,7 @@ export default function Home() {
                 ))}
               </select>
               <button onClick={createSession} style={{ padding: "0.5rem", backgroundColor: "var(--primary)", border: "none", borderRadius: "4px", color: "var(--background)", cursor: "pointer" }}>New Session</button>
+              <button onClick={detectProjects} style={{ padding: "0.5rem", backgroundColor: "var(--secondary)", border: "1px solid var(--border)", borderRadius: "4px", color: "var(--foreground)", cursor: "pointer" }}>Detect Projects</button>
             </>
           )}
           <button onClick={linkNode} style={{ padding: "0.5rem", backgroundColor: "var(--secondary)", border: "1px solid var(--border)", borderRadius: "4px", color: "var(--foreground)", cursor: "pointer" }}>Link Node</button>
