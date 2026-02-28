@@ -1,5 +1,8 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
+
+const TerminalView = dynamic(() => import("./components/TerminalView"), { ssr: false });
 
 interface Extension {
   id: string;
@@ -25,6 +28,7 @@ export default function Home() {
   const [showExtensions, setShowExtensions] = useState(false);
   const [nodes, setNodes] = useState<string[]>([]);
   const [installingAll, setInstallingAll] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(false);
 
   useEffect(() => {
     fetchSessions();
@@ -281,6 +285,9 @@ export default function Home() {
           </button>
           {!showExtensions && (
             <>
+              <button onClick={() => setShowTerminal(!showTerminal)} style={{ padding: "0.5rem", backgroundColor: "var(--secondary)", border: "1px solid var(--border)", borderRadius: "4px", color: "var(--foreground)", cursor: "pointer" }}>
+                {showTerminal ? "Exit Terminal" : "Open Terminal"}
+              </button>
               <select value={selectedSession} onChange={(e) => setSelectedSession(e.target.value)} style={{ padding: "0.5rem" }}>
                 <option value="" disabled>Select session</option>
                 {sessions.map((s) => (
@@ -344,6 +351,14 @@ export default function Home() {
               </div>
             </section>
           </div>
+        ) : showTerminal && selectedSession ? (
+          <div style={{ height: "100%", width: "100%" }}>
+            <TerminalView
+              sessionId={selectedSession}
+              cwd={selectedSession.includes(':') ? '' : selectedSession}
+              onClose={() => setShowTerminal(false)}
+            />
+          </div>
         ) : (
           <div style={{ whiteSpace: "pre-wrap" }}>
             {output || "No output yet. Start chatting!"}
@@ -351,7 +366,7 @@ export default function Home() {
         )}
       </main>
 
-      {!showExtensions && (
+      {!showExtensions && !showTerminal && (
         <footer style={{ display: "flex", marginTop: "1rem", gap: "0.5rem", flexWrap: "wrap" }}>
           <input
             type="text"
