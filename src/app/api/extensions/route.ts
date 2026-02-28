@@ -35,8 +35,7 @@ export async function GET(req: Request) {
     try {
       const { stdout } = await execPromise("gemini extensions list");
       // Basic parsing of output, assuming it's a list
-      const installed = stdout.split("
-").filter(line => line.trim().length > 0);
+      const installed = stdout.split("\n").filter(line => line.trim().length > 0);
       return NextResponse.json({ extensions: installed });
     } catch (err: any) {
       return NextResponse.json({ error: err.message }, { status: 500 });

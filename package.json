@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "next dev -p 3045",
-    "build": "next build",
+    "dev": "next dev -p 3045 --webpack",
+    "build": "next build --webpack",
     "start": "next start -p 3045",
     "lint": "next lint"
   },
